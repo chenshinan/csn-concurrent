@@ -1,8 +1,8 @@
-package com.chenshinan.concurrent.cas;
+package com.chenshinan.concurrent.CAS;
 
 import sun.misc.Unsafe;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * @author shinan.chen
@@ -55,11 +55,11 @@ public class MyAtomicInteger {
         }
     }
 
-    public final int getAndDecrement(){
-        while(true){
+    public final int getAndDecrement() {
+        while (true) {
             int current = get();
             int last = current - 1;
-            if(compareAndSet(current, last)){
+            if (compareAndSet(current, last)) {
                 return current;
             }
         }
