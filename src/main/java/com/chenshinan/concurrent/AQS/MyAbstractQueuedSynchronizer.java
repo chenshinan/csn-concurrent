@@ -17,88 +17,72 @@ import java.util.concurrent.locks.LockSupport;
  */
 public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSynchronizer {
 
-    protected MyAbstractQueuedSynchronizer() {
+    /**
+     * 【独占模式：获取同步状态】
+     * 该方法将会调用子类复写的 tryAcquire 方法获取同步状态，
+     * - 获取成功：直接返回
+     * - 获取失败：将线程封装在节点中，并将节点置于同步队列尾部，
+     * 通过自旋尝试获取同步状态。如果在有限次内仍无法获取同步状态，
+     * 该线程将会被 LockSupport.park 方法阻塞住，直到被前驱节点唤醒
+     */
+    public final void acquire(int arg) {
+        if (!tryAcquire(arg) &&
+                acquireQueued(addWaiter(MyAbstractQueuedSynchronizer.Node.EXCLUSIVE), arg)){
+            selfInterrupt();
+        }
     }
 
     /**
-     * Wait queue node class.
-     *
-     * <p>The wait queue is a variant of a "CLH" (Craig, Landin, and
-     * Hagersten) lock queue. CLH locks are normally used for
-     * spinlocks.  We instead use them for blocking synchronizers, but
-     * use the same basic tactic of holding some of the control
-     * information about a thread in the predecessor of its node.  A
-     * "status" field in each node keeps track of whether a thread
-     * should block.  A node is signalled when its predecessor
-     * releases.  Each node of the queue otherwise serves as a
-     * specific-notification-style monitor holding a single waiting
-     * thread. The status field does NOT control whether threads are
-     * granted locks etc though.  A thread may try to acquire if it is
-     * first in the queue. But being first does not guarantee success;
-     * it only gives the right to contend.  So the currently released
-     * contender thread may need to rewait.
-     *
-     * <p>To enqueue into a CLH lock, you atomically splice it in as new
-     * tail. To dequeue, you just set the head field.
-     * <pre>
-     *      +------+  prev +-----+       +-----+
-     * head |      | <---- |     | <---- |     |  tail
-     *      +------+       +-----+       +-----+
-     * </pre>
-     *
-     * <p>Insertion into a CLH queue requires only a single atomic
-     * operation on "tail", so there is a simple atomic point of
-     * demarcation from unqueued to queued. Similarly, dequeuing
-     * involves only updating the "head". However, it takes a bit
-     * more work for nodes to determine who their successors are,
-     * in part to deal with possible cancellation due to timeouts
-     * and interrupts.
-     *
-     * <p>The "prev" links (not used in original CLH locks), are mainly
-     * needed to handle cancellation. If a node is cancelled, its
-     * successor is (normally) relinked to a non-cancelled
-     * predecessor. For explanation of similar mechanics in the case
-     * of spin locks, see the papers by Scott and Scherer at
-     * http://www.cs.rochester.edu/u/scott/synchronization/
-     *
-     * <p>We also use "next" links to implement blocking mechanics.
-     * The thread id for each node is kept in its own node, so a
-     * predecessor signals the next node to wake up by traversing
-     * next link to determine which thread it is.  Determination of
-     * successor must avoid races with newly queued nodes to set
-     * the "next" fields of their predecessors.  This is solved
-     * when necessary by checking backwards from the atomically
-     * updated "tail" when a node's successor appears to be null.
-     * (Or, said differently, the next-links are an optimization
-     * so that we don't usually need a backward scan.)
-     *
-     * <p>Cancellation introduces some conservatism to the basic
-     * algorithms.  Since we must poll for cancellation of other
-     * nodes, we can miss noticing whether a cancelled node is
-     * ahead or behind us. This is dealt with by always unparking
-     * successors upon cancellation, allowing them to stabilize on
-     * a new predecessor, unless we can identify an uncancelled
-     * predecessor who will carry this responsibility.
-     *
-     * <p>CLH queues need a dummy header node to get started. But
-     * we don't create them on construction, because it would be wasted
-     * effort if there is never contention. Instead, the node
-     * is constructed and head and tail pointers are set upon first
-     * contention.
-     *
-     * <p>Threads waiting on Conditions use the same nodes, but
-     * use an additional link. Conditions only need to link nodes
-     * in simple (non-concurrent) linked queues because they are
-     * only accessed when exclusively held.  Upon await, a node is
-     * inserted into a condition queue.  Upon signal, the node is
-     * transferred to the main queue.  A special value of status
-     * field is used to mark which queue a node is on.
-     *
-     * <p>Thanks go to Dave Dice, Mark Moir, Victor Luchangco, Bill
-     * Scherer and Michael Scott, along with members of JSR-166
-     * expert group, for helpful ideas, discussions, and critiques
-     * on the design of this class.
+     * 【独占模式：释放同步状态】
      */
+    public final boolean release(int arg) {
+        if (tryRelease(arg)) {
+            /*
+             * 这里简单列举条件分支的可能性，如下：
+             * 1. head = null
+             *     head 还未初始化。初始情况下，head = null，当第一个节点入队后，head 会被初始
+             *     为一个虚拟（dummy）节点。这里，如果还没节点入队就调用 release 释放同步状态，
+             *     就会出现 h = null 的情况。
+             *
+             * 2. head != null && waitStatus = 0
+             *     表明后继节点对应的线程仍在运行中，不需要唤醒
+             *
+             * 3. head != null && waitStatus < 0
+             *     后继节点对应的线程可能被阻塞了，需要唤醒
+             */
+            MyAbstractQueuedSynchronizer.Node h = head;
+            if (h != null && h.waitStatus != 0) {
+                unparkSuccessor(h);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 【共享模式：获取共享同步状态】
+     */
+    public final void acquireShared(int arg) {
+        // 尝试获取共享同步状态，tryAcquireShared 返回的是整型
+        if (tryAcquireShared(arg) < 0){
+            doAcquireShared(arg);
+        }
+    }
+
+    /**
+     * 【共享模式：释放共享同步状态】
+     */
+    public final boolean releaseShared(int arg) {
+        if (tryReleaseShared(arg)) {
+            doReleaseShared();
+            return true;
+        }
+        return false;
+    }
+
+
+    protected MyAbstractQueuedSynchronizer() {
+    }
     static final class Node {
         /**
          * 标记表示节点正在共享模式中等待
@@ -419,7 +403,7 @@ public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSync
     private void setHeadAndPropagate(MyAbstractQueuedSynchronizer.Node node, int propagate) {
         MyAbstractQueuedSynchronizer.Node h = head; // Record old head for check below
         setHead(node);
-        /**
+        /*
          * 如果出现以下情况，请尝试发出下一个排队节点的信号：
          * 传入的propagate大于0或者原头节点有信号，并且
          * 下一个节点是共享模式，则要发出共享模式的释放信号
@@ -675,6 +659,7 @@ public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSync
      * @param arg the acquire argument
      */
     private void doAcquireShared(int arg) {
+        //添加节点类型为【共享模式的节点】
         final MyAbstractQueuedSynchronizer.Node node = addWaiter(MyAbstractQueuedSynchronizer.Node.SHARED);
         boolean failed = true;
         try {
@@ -922,18 +907,6 @@ public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSync
         throw new UnsupportedOperationException();
     }
 
-    /**
-     * 该方法将会调用子类复写的 tryAcquire 方法获取同步状态，
-     * - 获取成功：直接返回
-     * - 获取失败：将线程封装在节点中，并将节点置于同步队列尾部，
-     * 通过自旋尝试获取同步状态。如果在有限次内仍无法获取同步状态，
-     * 该线程将会被 LockSupport.park 方法阻塞住，直到被前驱节点唤醒
-     */
-    public final void acquire(int arg) {
-        if (!tryAcquire(arg) &&
-                acquireQueued(addWaiter(MyAbstractQueuedSynchronizer.Node.EXCLUSIVE), arg))
-            selfInterrupt();
-    }
 
     /**
      * Acquires in exclusive mode, aborting if interrupted.
@@ -983,48 +956,6 @@ public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSync
     }
 
     /**
-     * 释放同步状态
-     */
-    public final boolean release(int arg) {
-        if (tryRelease(arg)) {
-            /*
-             * 这里简单列举条件分支的可能性，如下：
-             * 1. head = null
-             *     head 还未初始化。初始情况下，head = null，当第一个节点入队后，head 会被初始
-             *     为一个虚拟（dummy）节点。这里，如果还没节点入队就调用 release 释放同步状态，
-             *     就会出现 h = null 的情况。
-             *
-             * 2. head != null && waitStatus = 0
-             *     表明后继节点对应的线程仍在运行中，不需要唤醒
-             *
-             * 3. head != null && waitStatus < 0
-             *     后继节点对应的线程可能被阻塞了，需要唤醒
-             */
-            MyAbstractQueuedSynchronizer.Node h = head;
-            if (h != null && h.waitStatus != 0)
-                unparkSuccessor(h);
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * Acquires in shared mode, ignoring interrupts.  Implemented by
-     * first invoking at least once {@link #tryAcquireShared},
-     * returning on success.  Otherwise the thread is queued, possibly
-     * repeatedly blocking and unblocking, invoking {@link
-     * #tryAcquireShared} until success.
-     *
-     * @param arg the acquire argument.  This value is conveyed to
-     *            {@link #tryAcquireShared} but is otherwise uninterpreted
-     *            and can represent anything you like.
-     */
-    public final void acquireShared(int arg) {
-        if (tryAcquireShared(arg) < 0)
-            doAcquireShared(arg);
-    }
-
-    /**
      * Acquires in shared mode, aborting if interrupted.  Implemented
      * by first checking interrupt status, then invoking at least once
      * {@link #tryAcquireShared}, returning on success.  Otherwise the
@@ -1068,23 +999,6 @@ public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSync
             throw new InterruptedException();
         return tryAcquireShared(arg) >= 0 ||
                 doAcquireSharedNanos(arg, nanosTimeout);
-    }
-
-    /**
-     * Releases in shared mode.  Implemented by unblocking one or more
-     * threads if {@link #tryReleaseShared} returns true.
-     *
-     * @param arg the release argument.  This value is conveyed to
-     *            {@link #tryReleaseShared} but is otherwise uninterpreted
-     *            and can represent anything you like.
-     * @return the value returned from {@link #tryReleaseShared}
-     */
-    public final boolean releaseShared(int arg) {
-        if (tryReleaseShared(arg)) {
-            doReleaseShared();
-            return true;
-        }
-        return false;
     }
 
     // Queue inspection methods

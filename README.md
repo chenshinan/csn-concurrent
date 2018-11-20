@@ -163,7 +163,7 @@ AQS 是很多同步器的基础框架，比如 ReentrantLock、CountDownLatch �
 
 * -获取成功，直接返回
 
-* -获取失败，将线程封装到节点中，并调用`acquireQueued`将节点入队
+* -获取失败，调用`addWaiter（传入Node.EXCLUSIVE）`将线程封装到节点中并将节点入队，再调用`acquireQueued`
 
 * 入队节点在`acquireQueued`方法中自旋获取同步状态
 
@@ -204,6 +204,70 @@ AQS 是很多同步器的基础框架，比如 ReentrantLock、CountDownLatch �
 * --`head!=null && waitStatus=0`，表示后续节点还在运行中，不需要唤醒
 
 * --`head!=null && waitStatus<0`，表示后续线程可能被阻塞，需要唤醒，调用`unparkSuccessor(h)`
+
+### 共享模式：获取共享状态
+
+与独占模式不同，共享模式下，同一时刻会有多个线程获取共享同步状态。共享模式是实现读写锁中的读锁、CountDownLatch 和 Semaphore 等同步组件的基础
+
+* 调用`acquireShared`，内部调用`tryAcquireShared（自定义覆盖实现的）`方法尝试获取共享同步状态
+
+* -获取成功，直接返回
+
+* -获取失败，进入`doAcquireShared`，首先调用`addWaiter（传入Node.SHARED）`将线程封装到节点中并将节点入队
+
+* 入队节点在`doAcquireShared`方法中自旋获取同步状态
+
+* 若节点的前驱节点是头节点，则再次调用`tryAcquireShared`尝试获取共享同步状态`（如果头节点是 EXCLUSIVE，线程无法获取共享同步状态。如果是 SHARED，线程则可获取共享同步状态）`
+
+* -获取成功，调用`setHeadAndPropagate`，将自己设为头节点
+
+* --如果propagate>0，并且旧的头节点的waitStatus < 0 即 waitStatus = SIGNAL 或 PROPAGATE 时，并且当前节点的后续节点是`共享节点`，则调用`doReleaseShared`继续唤醒
+
+* ---`doReleaseShared`，如果 head 节点等待状态为 SIGNAL，则将 head 节点状态设为 0，并调用`unparkSuccessor`唤醒后继节点，如果 head 节点等待状态为 0，则将 head 节点状态设为 PROPAGATE，保证唤醒能够正常传播下去
+
+* --否则不唤醒后续节点
+
+* -获取失败，进入下一步判断
+
+* 获取同步状态失败，则会调用`shouldParkAfterFailedAcquire`判断是否应该阻塞自己，如果不阻塞，CPU就会处于忙等状态，这样会浪费CPU资源
+
+* `shouldParkAfterFailedAcquire`中会根据前驱节点的waitStatus的值，决定后续的动作
+
+* -前驱节点等待状态为`SIGNAL(-1)`，表示当前线程应该被阻塞，调用`parkAndCheckInterrupt`中的`LockSupport.park(this)`阻塞自己，线程阻塞后，会在前驱节点释放同步状态后被前驱节点线程唤醒
+
+* -前驱节点等待状态为`CANCELLED(1)`，则以前驱节点为起点向前遍历，移除其他等待状态为 CANCELLED 的节点，继续自旋获取同步状态
+
+* -否则前驱节点等待状态为`0 或 PROPAGATE(-3)`，则设置前驱节点为 SIGNAL，继续自旋获取同步状态
+
+* 如果在获取同步状态中出现异常`（tryAcquire 需同步组件开发者覆写，难免不了会出现异常）`，则会调用`cancelAcquire`取消获取同步状态
+
+* `cancelAcquire`中，设置当前节点为 CANCELLED，继续唤醒后续节点`unparkSuccessor(node)`
+
+* `unparkSuccessor`中通过CAS将当前节点设置为 0，以便后续节点多一次尝试获取同步状态的机会，唤醒后续节点线程`LockSupport.unpark(s.thread)`
+
+> 总结
+
+共享模式获取同步状态时，调用`acquireShared`之后，内部会调用`tryAcquireShared`获取同步状态，并调用`doReleaseShared`唤醒后续节点`（必须是共享节点）`，后续线程会继续执行`tryAcquireShared`，而设置等待状态为`PROPAGATE`是为了让线程继续传播下去
+
+### 共享模式：释放共享状态
+
+* 调用`releaseShared`，内部调用`tryReleaseShared（自定义覆盖实现的）`方法尝试释放同步状态
+
+* -获取失败，返回false
+
+* -获取成功，调用`doReleaseShared`
+
+* --`doReleaseShared`，如果 head 节点等待状态为 SIGNAL，则将 head 节点状态设为 0，并调用`unparkSuccessor`唤醒后继节点，如果 head 节点等待状态为 0，则将 head 节点状态设为 PROPAGATE，保证唤醒能够正常传播下去
+
+### PROPAGATE
+
+> 问题一：PROPAGATE 状态用在哪里，以及怎样向后传播唤醒动作的？
+
+答：PROPAGATE 状态用在 setHeadAndPropagate。当头节点状态被设为 PROPAGATE 后，后继节点成为新的头结点后。若 propagate > 0 条件不成立，则根据条件h.waitStatus < 0成立与否，来决定是否唤醒后继节点，即向后传播唤醒动作。
+
+> 问题二：引入 PROPAGATE 状态是为了解决什么问题？
+
+答：引入 PROPAGATE 状态是为了解决并发释放信号量所导致部分请求信号量的线程无法被唤醒的问题
 
 ### CountDownLatch
 
