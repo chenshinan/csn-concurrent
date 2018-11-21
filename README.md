@@ -157,6 +157,24 @@ AQS 是很多同步器的基础框架，比如 ReentrantLock、CountDownLatch �
 |PROPAGATE(-3)|用于将唤醒后继线程传递下去，这个状态的引入是为了完善和增强共享锁的唤醒机制。在一个节点成为头节点之前，是不会跃迁为此状态的|
 |0|表示无状态，后续节点正在运行中|
 
+### 需要由同步组件覆写的方法
+
+* tryAcquire：尝试获取同步状态
+
+返回`true`获取成功，返回`false`获取失败
+
+* tryRelease：尝试释放同步状态
+
+返回`true`释放成功，返回`false`释放失败
+
+* tryAcquireShared：尝试获取共享同步状态
+
+返回结果`小于0`获取失败，`大于等于0`获取成功
+
+* tryReleaseShared：尝试释放共享同步状态
+
+返回`true`释放成功，返回`false`释放失败
+
 ### 独占模式：获取锁
 
 * 调用`acquire`，内部调用`tryAcquire（自定义覆盖实现的）`方法尝试获取同步状态
@@ -253,11 +271,15 @@ AQS 是很多同步器的基础框架，比如 ReentrantLock、CountDownLatch �
 
 * 调用`releaseShared`，内部调用`tryReleaseShared（自定义覆盖实现的）`方法尝试释放同步状态
 
-* -获取失败，返回false
+* -释放失败，返回false
 
-* -获取成功，调用`doReleaseShared`
+* -释放成功，调用`doReleaseShared`
 
 * --`doReleaseShared`，如果 head 节点等待状态为 SIGNAL，则将 head 节点状态设为 0，并调用`unparkSuccessor`唤醒后继节点，如果 head 节点等待状态为 0，则将 head 节点状态设为 PROPAGATE，保证唤醒能够正常传播下去
+
+> 总结
+
+当某个线程被唤醒后，在`doAcquireShared`方法中会循环继续调用`tryAcquireShared`尝试获取共享同步状态，成功获取同步状态后，会向后传播唤醒`为共享模式的后续节点的线程`，以此达到共享锁的实现
 
 ### PROPAGATE
 
@@ -272,3 +294,71 @@ AQS 是很多同步器的基础框架，比如 ReentrantLock、CountDownLatch �
 ### CountDownLatch
 
 CountDownLatch是一个同步工具类，用来协调多个线程之间的同步，能够使一个线程在等待另外一些线程完成各自工作之后，再继续执行。使用一个计数器进行实现。计数器初始值为线程的数量。当每一个线程完成自己任务后，计数器的值就会减一。当计数器的值为0时，表示所有的线程都已经完成了任务，然后在CountDownLatch上等待的线程就可以恢复执行任务
+
+* 核心代码
+
+```java
+@Override
+protected int tryAcquireShared(int acquires) {
+    /*
+     * 获取共享同步状态，若同步状态为0，则获取成功，否则获取失败
+     */
+    return (getState() == 0) ? 1 : -1;
+}
+@Override
+protected boolean tryReleaseShared(int releases) {
+    /*
+     * 释放共享同步状态，若为0释放失败，否则通过CAS-1，当减到0时，释放成功
+     */
+    for (; ; ) {
+        int c = getState();
+        if (c == 0) {
+            return false;
+        }
+        int nextc = c - 1;
+        if (compareAndSetState(c, nextc)) {
+            return nextc == 0;
+        }
+    }
+}
+```
+
+* 创建共享同步锁
+
+```java
+final CountDownLatch latch = new CountDownLatch(10);
+```
+
+* 生成多个线程去调用tryReleaseShared，从而减少同步状态的值，
+
+```java
+for(int i=0; i< 10; i++){
+    new Thread(new Runnable() {
+        @Override
+        public void run() {
+            System.out.println("线程" + Thread.currentThread().getId() + "准备减少同步状态");
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            System.out.println("线程" + Thread.currentThread().getId() + "成功减少同步状态");
+            latch.countDown();
+        }
+    }).start();
+}
+```
+
+* 主线程获取同步状态
+
+```java
+try {
+    latch.await();
+} catch (InterruptedException e) {
+    e.printStackTrace();
+}
+```
+
+* 原理
+
+主线程调用`await()`，await()内部调用`tryAcquireShared()`获取共享同步状态，一开始线程获取时无法获取同步状态而阻塞线程，当其他线程调用`countDown()`减少同步状态至0时成功释放同步状态后，唤醒阻塞的主线程，从而达到`能够使一个线程在等待另外一些线程完成各自工作之后，再继续执行`的功能，这里用到的是AQS的`共享模式`，所以后续阻塞的共享模式节点线程都会被唤醒，达到`同时唤醒多个线程`的功能

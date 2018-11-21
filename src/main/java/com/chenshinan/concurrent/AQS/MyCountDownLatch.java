@@ -4,6 +4,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 
 /**
+ * 同步器：在多线程任务中，所有任务都完成了才能继续往下执行
+ *
  * @author shinan.chen
  * @since 2018/11/16
  */
@@ -24,12 +26,17 @@ public class MyCountDownLatch {
 
         @Override
         protected int tryAcquireShared(int acquires) {
+            /*
+             * 获取共享同步状态，若同步状态为0，则获取成功，否则获取失败
+             */
             return (getState() == 0) ? 1 : -1;
         }
 
         @Override
         protected boolean tryReleaseShared(int releases) {
-            // Decrement count; signal when transition to zero
+            /*
+             * 释放共享同步状态，若为0释放失败，否则通过CAS-1，当减到0时，释放成功
+             */
             for (; ; ) {
                 int c = getState();
                 if (c == 0) {

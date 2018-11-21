@@ -1402,7 +1402,7 @@ public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSync
      * @return {@code true} if owned
      * @throws NullPointerException if the condition is null
      */
-    public final boolean owns(AbstractQueuedSynchronizer.ConditionObject condition) {
+    public final boolean owns(MyAbstractQueuedSynchronizer.ConditionObject condition) {
         return condition.isOwnedBy(this);
     }
 
@@ -1422,7 +1422,7 @@ public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSync
      *                                      not associated with this synchronizer
      * @throws NullPointerException         if the condition is null
      */
-    public final boolean hasWaiters(AbstractQueuedSynchronizer.ConditionObject condition) {
+    public final boolean hasWaiters(MyAbstractQueuedSynchronizer.ConditionObject condition) {
         if (!owns(condition))
             throw new IllegalArgumentException("Not owner");
         return condition.hasWaiters();
@@ -1444,7 +1444,7 @@ public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSync
      *                                      not associated with this synchronizer
      * @throws NullPointerException         if the condition is null
      */
-    public final int getWaitQueueLength(AbstractQueuedSynchronizer.ConditionObject condition) {
+    public final int getWaitQueueLength(MyAbstractQueuedSynchronizer.ConditionObject condition) {
         if (!owns(condition))
             throw new IllegalArgumentException("Not owner");
         return condition.getWaitQueueLength();
@@ -1466,7 +1466,7 @@ public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSync
      *                                      not associated with this synchronizer
      * @throws NullPointerException         if the condition is null
      */
-    public final Collection<Thread> getWaitingThreads(AbstractQueuedSynchronizer.ConditionObject condition) {
+    public final Collection<Thread> getWaitingThreads(MyAbstractQueuedSynchronizer.ConditionObject condition) {
         if (!owns(condition))
             throw new IllegalArgumentException("Not owner");
         return condition.getWaitingThreads();
@@ -1474,7 +1474,7 @@ public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSync
 
     /**
      * Condition implementation for a {@link
-     * AbstractQueuedSynchronizer} serving as the basis of a {@link
+     * MyAbstractQueuedSynchronizer} serving as the basis of a {@link
      * Lock} implementation.
      *
      * <p>Method documentation for this class describes mechanics,
@@ -1482,7 +1482,7 @@ public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSync
      * and Condition users. Exported versions of this class will in
      * general need to be accompanied by documentation describing
      * condition semantics that rely on those of the associated
-     * {@code AbstractQueuedSynchronizer}.
+     * {@code MyAbstractQueuedSynchronizer}.
      *
      * <p>This class is Serializable, but all fields are transient,
      * so deserialized conditions have no waiters.
@@ -1853,13 +1853,13 @@ public abstract class MyAbstractQueuedSynchronizer extends MyAbstractOwnableSync
          *
          * @return {@code true} if owned
          */
-        final boolean isOwnedBy(AbstractQueuedSynchronizer sync) {
-            return sync == AbstractQueuedSynchronizer.this;
+        final boolean isOwnedBy(MyAbstractQueuedSynchronizer sync) {
+            return sync == MyAbstractQueuedSynchronizer.this;
         }
 
         /**
          * Queries whether any threads are waiting on this condition.
-         * Implements {@link AbstractQueuedSynchronizer#hasWaiters(AbstractQueuedSynchronizer.ConditionObject)}.
+         * Implements {@link MyAbstractQueuedSynchronizer#hasWaiters(MyAbstractQueuedSynchronizer.ConditionObject)}.
          *
          * @return {@code true} if there are any waiting threads
          * @throws IllegalMonitorStateException if {@link #isHeldExclusively}
