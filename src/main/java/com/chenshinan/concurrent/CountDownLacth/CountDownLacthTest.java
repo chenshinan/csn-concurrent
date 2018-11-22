@@ -1,4 +1,6 @@
-package com.chenshinan.concurrent.AQS;
+package com.chenshinan.concurrent.CountDownLacth;
+
+import com.chenshinan.concurrent.CountDownLacth.MyCountDownLatch;
 
 /**
  * 能够使一个线程在等待另外一些线程完成各自工作之后，再继续执行

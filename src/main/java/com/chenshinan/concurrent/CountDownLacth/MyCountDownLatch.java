@@ -1,4 +1,4 @@
-package com.chenshinan.concurrent.AQS;
+package com.chenshinan.concurrent.CountDownLacth;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.AbstractQueuedSynchronizer;
