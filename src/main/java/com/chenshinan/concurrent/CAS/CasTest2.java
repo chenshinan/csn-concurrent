@@ -5,16 +5,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 控制多线程按照顺序输出，并不需要用到Atomic相关类，主要考察的是volatile
- *
  * @author shinan.chen
  * @since 2018/12/4
  */
-public class CasTest {
-    public static volatile String modeStr = "A";
-
+public class CasTest2 {
     public static void main(String[] args) {
-        System.out.print("请输入打印次数：");
         Scanner scanner = new Scanner(System.in);
         AtomicReference<String> mode = new AtomicReference<>("A");
         AtomicInteger frequence = new AtomicInteger(scanner.nextInt());
@@ -38,9 +33,13 @@ public class CasTest {
         @Override
         public void run() {
             while (frequence.get() > 0) {
-                if (modeStr.equals("A")) {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                if(mode.compareAndSet("A","L")){
                     System.out.print("A");
-                    modeStr = "L";
                 }
             }
         }
@@ -60,9 +59,13 @@ public class CasTest {
         public void run() {
 //            System.out.println(frequence.get());
             while (frequence.get() > 0) {
-                if (modeStr.equals("L")) {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                if(mode.compareAndSet("L","I")){
                     System.out.print("L");
-                    modeStr = "I";
                 }
             }
         }
@@ -80,10 +83,9 @@ public class CasTest {
         @Override
         public void run() {
             while (frequence.get() > 0) {
-                if (modeStr.equals("I")) {
+                if(mode.compareAndSet("I","A")){
                     System.out.print("I");
                     frequence.decrementAndGet();
-                    modeStr = "A";
                 }
             }
 
