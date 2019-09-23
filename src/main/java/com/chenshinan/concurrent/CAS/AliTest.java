@@ -1,8 +1,5 @@
 package com.chenshinan.concurrent.CAS;
 
-import java.util.Scanner;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -15,98 +12,69 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class AliTest {
 
+    private static Integer valueA = 1;
+    private static Integer frequence = 3;
+    private static final ReentrantLock lock = new ReentrantLock();
+
     public static void main(String[] args) {
-        System.out.print("请输入打印次数:");
-        Scanner scanner = new Scanner(System.in);
-        AtomicInteger valueA = new AtomicInteger(1);
-        AtomicInteger frequence = new AtomicInteger(scanner.nextInt());
-        Thread threadA = new ThreadA(frequence, valueA);
-        Thread threadB = new ThreadB(frequence, valueA);
-        Thread threadC = new ThreadC(frequence, valueA);
-        threadA.start();
-        threadB.start();
-        threadC.start();
+        doSomething();
+
+    }
+
+    private static void doSomething() {
+        for (int i = 0; i < 10; i++) {
+            Thread threadA = new ThreadA();
+            Thread threadB = new ThreadB();
+            Thread threadC = new ThreadC();
+            threadA.start();
+            threadB.start();
+            threadC.start();
+        }
     }
 
     static class ThreadA extends Thread {
 
-        private Lock lock = new ReentrantLock();
-        private AtomicInteger frequence;
-        private AtomicInteger valueA;
-
-        public ThreadA(AtomicInteger frequence, AtomicInteger valueA) {
-            this.frequence = frequence;
-            this.valueA = valueA;
-        }
-
         @Override
         public void run() {
-//            lock.lock();
-//            try {
-                while (frequence.get() > 0) {
-                    if (valueA.get() == 1) {
-                        System.out.print("A");
-                        valueA.compareAndSet(valueA.get(), 2);
-                    }
+            while (frequence > 0) {
+                lock.lock();
+                if (lock.isLocked() && valueA == 1) {
+                    System.out.print("A");
+                    valueA = 2;
                 }
-//            } finally {
-//                lock.unlock();// 释放锁
-//            }
+                lock.unlock();
+            }
         }
     }
 
     static class ThreadB extends Thread {
 
-        private Lock lock = new ReentrantLock();
-        private AtomicInteger frequence;
-        private AtomicInteger valueA;
-
-        public ThreadB(AtomicInteger frequence, AtomicInteger valueA) {
-            this.frequence = frequence;
-            this.valueA = valueA;
-        }
-
         @Override
         public void run() {
-//            lock.lock();
-//            try {
-                while (frequence.get() > 0) {
-                    if (valueA.get() == 2) {
-                        System.out.print("L");
-                        valueA.compareAndSet(valueA.get(), 3);
-                    }
+            while (frequence > 0) {
+                lock.lock();
+                if (lock.isLocked() && valueA == 2) {
+                    System.out.print("L");
+                    valueA = 3;
                 }
-//            } finally {
-//                lock.unlock();
-//            }
+                lock.unlock();
+            }
         }
     }
 
     static class ThreadC extends Thread {
 
-        private Lock lock = new ReentrantLock();
-        private AtomicInteger frequence;
-        private AtomicInteger valueA;
-
-        public ThreadC(AtomicInteger frequence, AtomicInteger valueA) {
-            this.frequence = frequence;
-            this.valueA = valueA;
-        }
-
         @Override
         public void run() {
-//            lock.lock();
-//            try {
-                while (frequence.get() > 0) {
-                    if (valueA.get() == 3) {
-                        System.out.print("I");
-                        frequence.compareAndSet(frequence.get(), frequence.get() - 1);
-                        valueA.compareAndSet(valueA.get(), 1);
-                    }
+            while (frequence > 0) {
+                lock.lock();
+                if (lock.isLocked() && valueA == 3) {
+                    System.out.print("I");
+                    frequence = frequence - 1;
+                    valueA = 1;
                 }
-//            } finally {
-//                lock.unlock();
-//            }
+                lock.unlock();
+            }
         }
     }
 
