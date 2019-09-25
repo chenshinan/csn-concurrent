@@ -35,7 +35,8 @@ public class MyCountDownLatch {
         @Override
         protected boolean tryReleaseShared(int releases) {
             /*
-             * 释放共享同步状态，若为0释放失败，否则通过CAS-1，当减到0时，释放成功
+             * 释放共享同步状态，若c=0说明已经释放了，否则通过CAS-1
+             * 当减到0时，返回true表面同步锁可以释放
              */
             for (; ; ) {
                 int c = getState();
